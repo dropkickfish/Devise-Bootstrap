@@ -9,6 +9,7 @@ end
 
 def setup_simple_form
   generate 'simple_form:install --bootstrap'
+  gsub_file 'config/initializers/simple_form_bootstrap.rb', /config.button_class = 'btn'/, "config.button_class = 'btn btn-primary'"
 end
 
 def setup_users
