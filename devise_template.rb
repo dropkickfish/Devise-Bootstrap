@@ -82,108 +82,18 @@ def source_paths
   [__dir__]
 end
 
-def add_bootstrap
-  bootstrap_stylesheets = 'app/assets/stylesheets/vendor/bootstrap/bootstrap.scss.tt'
-  bootstrap_javascript = 'app/javascript/vendor/bootstrap/index.js'
-
-  FileUtils.touch(bootstrap_stylesheets)
-  FileUtils.touch(bootstrap_javascript)
-
-  insert_into_file 'app/assets/stylesheets/application.scss', after: /\/\/ Dependencies\n/ do
-    <<~SCSS
-      @import 'vendor/bootstrap/bootstrap';
-    SCSS
-  end
-
-  insert_into_file 'package.json', after: /"i18n-js":.+\n/ do
-    <<~JSON
-      "bootstrap": "4.5.2",
-      "bootstrap.native": "3.0.13",
-    JSON
-  end
-
-  insert_into_file 'app/javascript/packs/application.js', before: %r{import 'translations/translations'.+\n} do
-    <<~JAVASCRIPT
-      import 'vendor/bootstrap';
-    JAVASCRIPT
-  end
-
-  import_into_file bootstrap_javascript do
-    <<~INDEXJS
-      import bootstrap from 'bootstrap.native/dist/bootstrap-native';
-
-      export const Alert = bootstrap.Alert;
-      export const Button = bootstrap.Button;
-      export const Carousel = bootstrap.Carousel;
-      export const Collapse = bootstrap.Collapse;
-      export const Dropdown = bootstrap.Dropdown;
-      export const Modal = bootstrap.Modal;
-      export const Popover = bootstrap.Popover;
-      export const ScrollSpy = bootstrap.ScrollSpy;
-      export const Tab = bootstrap.Tab;
-      export const Toast = bootstrap.Toast;
-      export const Tooltip = bootstrap.Tooltip;
-    INDEXJS
-  end
-
-  import_into_file bootstrap_stylesheets do
-    <<~STYLESHEET
-      // By default every component is imported
-      // But DO NOT import the whole framework but instead
-      // pick what the project requires
-      // and comment out the rest.
-      
-      @import 'bootstrap/scss/functions';
-      @import 'bootstrap/scss/variables';
-      @import 'bootstrap/scss/mixins';
-      @import 'bootstrap/scss/root';
-      @import 'bootstrap/scss/reboot';
-      @import 'bootstrap/scss/type';
-      @import 'bootstrap/scss/utilities';
-      @import 'bootstrap/scss/images';
-      @import 'bootstrap/scss/grid';
-      @import 'bootstrap/scss/forms';
-      @import 'bootstrap/scss/buttons';
-      @import 'bootstrap/scss/tables';
-      @import 'bootstrap/scss/code';
-      @import 'bootstrap/scss/transitions';
-      @import 'bootstrap/scss/dropdown';
-      @import 'bootstrap/scss/button-group';
-      @import 'bootstrap/scss/input-group';
-      @import 'bootstrap/scss/custom-forms';
-      @import 'bootstrap/scss/nav';
-      @import 'bootstrap/scss/navbar';
-      @import 'bootstrap/scss/card';
-      @import 'bootstrap/scss/breadcrumb';
-      @import 'bootstrap/scss/pagination';
-      @import 'bootstrap/scss/badge';
-      @import 'bootstrap/scss/jumbotron';
-      @import 'bootstrap/scss/alert';
-      @import 'bootstrap/scss/progress';
-      @import 'bootstrap/scss/media';
-      @import 'bootstrap/scss/list-group';
-      @import 'bootstrap/scss/close';
-      @import 'bootstrap/scss/toasts';
-      @import 'bootstrap/scss/modal';
-      @import 'bootstrap/scss/tooltip';
-      @import 'bootstrap/scss/popover';
-      @import 'bootstrap/scss/carousel';
-      @import 'bootstrap/scss/spinners';
-      @import 'bootstrap/scss/print';
-    STYLESHEET
-  end
-
-end
-
 def add_bootstrap_navbar
   navbar = 'app/views/layouts/_navbar.html.erb'
   FileUtils.touch(navbar)
   inject_into_file 'app/views/layouts/application.html.erb', before: '<%= yield %>' do
-    "\n<%= render 'layouts/navbar' %>\n"
+    "\n<%= render 'layouts/navbar' %>\n\n<div class=container>"
+  end
+  inject_into_file 'app/views/layouts/application.html.erb', after: '<%= yield %>' do
+    "\n<div>"
   end
   append_to_file navbar do
     '<nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <%= link_to Rails.application.class.parent_name, root_path, class:"navbar-brand"%>
+    <%= link_to Rails.application.class.module_parent.name, root_path, class:"navbar-brand"%>
     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
     </button>
@@ -230,12 +140,35 @@ def demo_rails_commands
   rails_command 'db:migrate'
 end
 
+def webpack
+  run "yarn add bootstrap@4.4.1 jquery popper.js"
+  inject_into_file 'config/webpack/environment.js', after: "require('@rails/webpacker')\n" do
+   <<-WEBPACK
+    const webpack = require('webpack')
+    environment.plugins.append('Provide', new webpack.ProvidePlugin({
+      $: 'jquery',
+      jQuery: 'jquery',
+      Popper: ['popper.js', 'default']
+    }))
+  WEBPACK
+  end
+
+  create_file 'app/javascript/packs/src/application.scss'
+  
+  inject_into_file 'app/javascript/packs/src/application.scss' do
+    "@import '~bootstrap/scss/bootstrap';"
+  end
+
+  inject_into_file 'app/javascript/packs/application.js', after: 'import "channels"'do
+    "\nimport 'bootstrap'\nimport './src/application.scss'"
+  end
+end
+
 after_bundle do
   setup_simple_form
   setup_users
-
   demo_rails_commands
-
-  add_bootstrap
   add_bootstrap_navbar
+  gsub_file 'config/environments/development.rb', /EventedFileUpdateChecker/, 'FileUpdateChecker'
+  webpack
 end
